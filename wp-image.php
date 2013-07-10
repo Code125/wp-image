@@ -1,245 +1,193 @@
 <?php
-/**
- * function: code125_get_size_array
+/** بسم الله الرحمن الرحيم **
  *
- * @param none
- * @return array of the image sizes you register to use
+ * Plugin Name: Code125 Image resizer 
+ * Plugin URI: http://code125.com/
+ * Description: Easily resize the image on the fly.
+ * Version: 1.0
+ * Author: Code125
+ * Author URI: http://themeforest.net/user/Code125
+ * License: GPLV3
+ *
  */
-function code125_get_size_array() {
-	$images_size_array=array(
-		array(
-		   'slug' => 'full',
-		   'width' => 999999,
-		   'height' => 9999,
-		   'crop' => false,
-		),
-		array(
-		   'slug' => 'large',
-		   'width' => 640,
-		   'height' => 640,
-		   'crop' => false,
-		),
-		array(
-		   'slug' => 'medium',
-		   'width' => 300,
-		   'height' => 300,
-		   'crop' => false,
-		),
-		array(
-		   'slug' => 'thumbnail',
-		   'width' => 150,
-		   'height' => 150,
-		   'crop' => false,
-		),
-		
-		
-		array(
-		   'slug' => 'image-size-1',
-		   'width' => 640,
-		   'height' => 300,
-		   'crop' => true,
-		)
-	);
-	return $images_size_array;
-}
-/**
-* function: code125_images_size_array
-*
-* @param name srting
-* @return array of the image properties to use in the crop/resize function
-*/
-function code125_images_size_array($name) {
-		
 
-	$return = array();
-	$images_size_array = code125_get_size_array();
-	foreach ($images_size_array as $array) {
-	
-		if($array['slug']== $name){
-			$return['width'] = $array['width'];
-			$return['height'] = $array['height'];
-			$return['crop'] = $array['crop'];
-		}
-		
-	}
-	
-	if(count($return) == 0){
-		$return = array(
-		   'slug' => 'full',
-		   'width' => 99999,
-		   'height' => 99999,
-		   'crop' => false,
-		);
-	
-	}
-	return $return;
-}
-/**
-* function: get_attachment_id_from_src
-*
-* @param attachment_src srting
-* @return id of the image attachment, if dont' exist it will return the given url
-*/
-function get_attachment_id_from_src ($attachment_src) {
-	global $wpdb;
-	$query = "SELECT ID FROM {$wpdb->posts} WHERE guid='$attachment_src'";
-	$id = $wpdb->get_var($query);
-	if($id == ''){
-		$id = $attachment_src;
-	}		
-	return $id;
-}
+
+include_once('image-dimensions.php');
 
 /**
-* function: code125_wp_get_attachment_image_src
+* function: code125_register_retina
 *
-* @param id_link srting, the attachment id
-* @param size string, size name
-* @return array that contains the source and dimensions of the image and if it is retina or not.
+* @param none
+* @return none
 */
-function code125_wp_get_attachment_image_src($id_link='', $size='') {
+
+function code125_register_retina() {
+	if( !isset($_COOKIE["device_pixel_ratio"]) ){
+	    
+	?>
+	<script language="javascript">
+	window.onload = function(){
+	  if( document.cookie.indexOf('device_pixel_ratio') == -1
+	      && 'devicePixelRatio' in window
+	      && window.devicePixelRatio == 2 ){
 	
-	$data = code125_images_size_array($size);
+	    var date = new Date();
+	    date.setTime( date.getTime() + 3600000 );
 	
-	if($data){
-	$width=$data['width'];
-	$height=$data['height'];
-	$crop=$data['crop'];
+	    document.cookie = 'device_pixel_ratio=' + window.devicePixelRatio + ';' +  ' expires=' + date.toGMTString() +'; path=/';
+	    window.location.reload();
+	  }
+	};
+	</script>
+	<?php } 
+}
+
+add_action('wp_head', 'code125_register_retina');
+
+function code125_check_image_size($size = 'thumbnail') {
 	
-	if( is_numeric($id_link)){
-	$image_url = wp_get_attachment_image_src( $id_link, 'full');
-	
-	
-	
-		$old_height  = $image_url[2];
-	
-		$old_width  = $image_url[1];
-	
-		if($height > $old_height &&  $width > $old_width ){
-			$height = $old_height;
-			$width = $old_width;
-		}	
-	
-	
-		if($crop==false){
-			if ($height > $width){
-				$height = $width * $old_height / $old_width;
-			
-			}
-			elseif ($width > $height){
-				$width = $height * $old_width / $old_height;
-			
-			}
-			else{
-				if ($old_height > $old_width) {
-					$height = $width * $old_height / $old_width;
-				}elseif ($old_width > $old_height) {
-					$width = $height * $old_width / $old_height;
-				} 
-			}
-		}else {
-			if ($height > $old_height) {
-				$height = $old_height;
-			}elseif ($width > $old_width) {
-				$width = $old_width;
-			
-			} 
+
+	global $_wp_additional_image_sizes;
+	$sizes = get_intermediate_image_sizes();
+	foreach ($_wp_additional_image_sizes as $key => $single_size) {
+		if( $key == $size){
+			$new_size = $_wp_additional_image_sizes[$key];
+			$img_array = array($new_size['width'], $new_size['height'],$new_size['crop']);
+			return $img_array;
 		}
-		$width = round($width);
-		$height = round($height);
-		$write_height =  $height;
-		$write_width =  $width;
-		
-	
-		$retina = false;
-		if( isset($_COOKIE["device_pixel_ratio"]) ){
-			$test_height =  2*$height;
-			$test_width =  2*$width;
-			if( $test_height < $old_height && $test_width < $old_width ){
-				$height = 2*$height;
-				$width = 2*$width;
-				$retina = true;
-			}
-	
-		}
-	
-		$base_url = wp_upload_dir();
-		$url = str_replace($base_url['baseurl'],$base_url['basedir'],$image_url[0]);
-		$image = wp_get_image_editor($url );
-		if ( ! is_wp_error( $image ) ) {
-		
-		    if( !file_exists($image->generate_filename($width .'x' . $height))){
-		    $image->resize($width, $height, $crop);
-		    $image->set_quality(80);
-		    $saved_file = $image->save();
-			$new_image_url = str_replace($base_url['basedir'],$base_url['baseurl'],$saved_file['path'] );
-			
-			}else {
-				$new_image_url = str_replace($base_url['basedir'],$base_url['baseurl'], $image->generate_filename($width .'x' . $height) );
-			}
-			if($retina){
-				return array($new_image_url, $width/2, $height/2,$retina);
-			
-			}else{
-				return array($new_image_url, $width, $height,$retina);
-			}
-		
-		
-		
-		
-		}else {
-			return false;
-		}
-	
-	}else {
-		list($width, $height, $type, $attr) = getimagesize($id_link);
-		$image_url = array($id_link,$width,$height,false);
-		return $image_url;
-		
 	}
 	
-	}else {
-		return false;
-	}
-	
-}
-/**
-* function: code125_the_post_thumbnail
-*
-* @param post_id srting, the post id
-* @param size string, image size name
-* @return html echo the featured image of this post in this size.
-*/
-function code125_the_post_thumbnail($post_id = null, $size = 'post-thumbnail') {
-	
-	echo  code125_get_the_post_thumbnail($post_id,$size);
-	
-}
-/**
-* function: code125_get_the_post_thumbnail
-*
-* @param post_id srting, the post id
-* @param size string, image size name
-* @return html  the featured image of this post in this size.
-*/
-function code125_get_the_post_thumbnail($post_id = null, $size = 'post-thumbnail') {
-	$post_id = ( null === $post_id ) ? get_the_ID() : $post_id;
-	
-	$id_link = get_post_thumbnail_id($post_id);
-	
-	if ( $id_link ) {
-		$image_url = code125_wp_get_attachment_image_src($id_link,$size );
-		if($image_url[0]!=''){
-		$the_post_thumbnail = '<img src="'.$image_url[0].'" width="'.$image_url[1].'" height="'.$image_url[2].'" alt="" class="thumb-'.$size .'" />';
-		}else {
-			$the_post_thumbnail ='';
-		}
+	global $_code125_image_sizes;
+
+	foreach ($_code125_image_sizes as $key => $size_2 ) {
+		if($key == $size ){
+			$img_array = array($size_2['width'], $size_2['height'],$size_2['crop']);
+			return $img_array;
 		
-	}else {
-		$the_post_thumbnail = '';
+		}
 	}
 	
-	return $the_post_thumbnail;
+	return false;
+	
 }
+
+function code125_image_downsize($ignore = false , $id = 0 , $size = 'medium') {
+	
+	
+	
+	if ( !wp_attachment_is_image($id) )
+	                return false;
+	
+	        $img_url = wp_get_attachment_url($id);
+	        $meta = wp_get_attachment_metadata($id);
+	        if($size == 'full'){
+	        	return array($img_url, $meta['width'], $meta['height'],false);
+	        }
+	        $width = $height = 0;
+	        $is_intermediate = false;
+	        $img_url_basename = wp_basename($img_url);
+	        
+	        $new_img_meta  =  code125_check_image_size($size) ;
+	       if(!$new_img_meta){
+	       		return array($img_url, $meta['width'], $meta['height'],false);
+	       }
+	       
+
+	       $new_image_dimen = image_resize_dimensions( $meta['width'], $meta['height'], $new_img_meta[0], $new_img_meta[1], $new_img_meta[2] );
+	       
+	       
+	       $height = $new_image_dimen[5];
+	       $width = $new_image_dimen[4];
+	       
+	       
+	       $retina = false;
+	       	if( isset($_COOKIE["device_pixel_ratio"]) ){
+	       		$test_height =  2*$height;
+	       		$test_width =  2*$width;
+	       		if( $test_height < $meta['height'] && $test_width < $meta['width'] ){
+	       			$height = 2*$height;
+	       			$width = 2*$width;
+	       			$retina = true;
+	       		}
+	       
+	       	}
+	       
+	       
+	       
+	       
+	       $base_url = wp_upload_dir();
+	       $url = str_replace($base_url['baseurl'],$base_url['basedir'],$img_url);
+	      	
+	      	$img_info = pathinfo($url);
+	      	$dir  = $img_info['dirname'];
+	      	$ext  = $img_info['extension'];
+	      	
+	      	$name = wp_basename( $img_url, ".$ext" );
+	      	
+	      	
+	      	
+	      	
+	      	$suffix = $width .'x' . $height;
+	      	
+	      	$new_file =  trailingslashit( $dir ) . "{$name}-{$suffix}.{$ext}";
+	      	if(file_exists($new_file)){
+	      		
+	      		$new_image_url = str_replace($base_url['basedir'],$base_url['baseurl'],$new_file );
+	      		if($retina){
+	      				return array($new_image_url, $width/2, $height/2,false);
+	      		
+	      			}else{
+	      				return array($new_image_url, $width, $height,false);
+	      				
+	      				
+	      			}
+	      		
+	      	}else{
+	      		$image = wp_get_image_editor($url );
+	      		if ( ! is_wp_error( $image ) ) {
+	      			
+	      		 
+	      		    if( !file_exists($image->generate_filename($width .'x' . $height))){
+	      		    $image->resize($width, $height, $new_img_meta[2]);
+	      		    $image->set_quality(80);
+	      		    $saved_file = $image->save();
+	      			   $new_image_url = str_replace($base_url['basedir'],$base_url['baseurl'],$saved_file['path'] );
+	      			
+	      				}else {
+	      					$new_image_url = str_replace($base_url['basedir'],$base_url['baseurl'], $image->generate_filename($width .'x' . $height) );
+	      				}
+	      				if($retina){
+	      					return array($new_image_url, $width/2, $height/2,false);
+	      			
+	      				}else{
+	      					
+	      					return array($new_image_url, $width, $height,false);
+	      				}
+	      		
+	      		}else {
+	      			return false;
+	      		}
+	      	}
+	      	
+	      	
+	       
+	  
+	  
+	       
+	      
+	  
+}
+
+	function code125_add_image_size( $name, $width = 0, $height = 0, $crop = false ) {
+	        global $_code125_image_sizes;
+	        $_code125_image_sizes[$name] = array( 'width' => absint( $width ), 'height' => absint( $height ), 'crop' => (bool) $crop );
+	}
+
+
+add_filter('image_downsize','code125_image_downsize', 99, 3);
+
+
+
+
 
 ?>
